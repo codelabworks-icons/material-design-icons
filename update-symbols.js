@@ -25,11 +25,7 @@ function toCamelCase(parts) {
 function sanitizeName(filename) {
   const ext = path.extname(filename);
   let base = path.basename(filename, ext);
-  base = base.replace(/
-
-\[.*\]
-
-$/, '');
+  base = base.replace(/\[.*\]$/, '');
   const m = base.match(MATERIAL_SYMBOLS_RE);
   if (m) {
     const matched = m[1];
@@ -124,7 +120,6 @@ async function main() {
   } else {
     console.log('No families detected.');
   }
-  // Move any fonts from TEMP_OUT to FONTS_DIR
   if (await fs.pathExists(TEMP_OUT)) {
     const tempFiles = await fs.readdir(TEMP_OUT);
     for (const file of tempFiles) {
@@ -133,7 +128,6 @@ async function main() {
       }
     }
   }
-  // 🔥 Delete everything in ROOT except fonts/ and css/
   const keep = new Set(['fonts', 'css']);
   const rootItems = await fs.readdir(ROOT);
   for (const item of rootItems) {
