@@ -1,7 +1,6 @@
 const fs = require('fs-extra');
 const path = require('path');
 const fetch = require('node-fetch');
-const mkdirp = require('mkdirp');
 
 const ROOT = process.cwd();
 const VARIABLE_DIR = path.join(ROOT, 'variablefont');
@@ -39,7 +38,7 @@ function sanitizeName(filename) {
 }
 
 async function copyAndSanitizeFonts() {
-  await mkdirp(TEMP_OUT);
+  await fs.ensureDir(TEMP_OUT);
   const files = await fs.readdir(VARIABLE_DIR);
   for (const file of files) {
     const src = path.join(VARIABLE_DIR, file);
@@ -79,7 +78,7 @@ async function fetchUrl(url) {
 }
 
 async function downloadCssAndAssets(families) {
-  await mkdirp(CSS_DIR);
+  await fs.ensureDir(CSS_DIR);
   for (const famPlus of families) {
     const cssBase = famPlus.replace(/\+/g, '');
     const cssPath = path.join(CSS_DIR, `${cssBase}.css`);
@@ -111,8 +110,8 @@ async function downloadCssAndAssets(families) {
 }
 
 async function main() {
-  await mkdirp(FONTS_DIR);
-  await mkdirp(CSS_DIR);
+  await fs.ensureDir(FONTS_DIR);
+  await fs.ensureDir(CSS_DIR);
   await copyAndSanitizeFonts();
   const families = await detectFamilies();
   if (families.length) {
