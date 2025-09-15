@@ -4,12 +4,19 @@ const fetch = require('node-fetch');
 
 const ROOT = process.cwd();
 const VARIABLE_DIR = path.join(ROOT, 'variablefont');
-const TEMP_OUT = path.join(ROOT, 'symbols', 'web');
-const FONTS_DIR = path.join(ROOT, 'fonts');
-const CSS_DIR = path.join(ROOT, 'css');
+const TEMP_SVGS = path.join(ROOT, 'symbols', 'web'); // will be moved & renamed
+const SVGS_DIR = path.join(ROOT, 'build', 'svgs');
+const FONTS_DIR = path.join(ROOT, 'build', 'fonts');
+const CSS_DIR = path.join(ROOT, 'build', 'css');
 
 const USER_AGENT = 'Mozilla/5.0 (compatible; UpdateScript/1.0)';
 const MATERIAL_SYMBOLS_RE = /(materialsymbols[0-9A-Za-z_-]*)/i;
+
+const VALID_GOOGLE_FONT_FAMILIES = new Set([
+  'Material+Symbols+Outlined',
+  'Material+Symbols+Rounded',
+  'Material+Symbols+Sharp'
+]);
 
 function camelCaseParts(str) {
   let s2 = str.replace(/[^A-Za-z0-9]+/g, ' ');
@@ -38,18 +45,18 @@ function sanitizeName(filename) {
 }
 
 async function copyAndSanitizeFonts() {
-  await fs.ensureDir(TEMP_OUT);
+  await fs.ensureDir(TEMP_SVGS);
   const files = await fs.readdir(VARIABLE_DIR);
   for (const file of files) {
     const src = path.join(VARIABLE_DIR, file);
     const stat = await fs.stat(src);
     if (!stat.isFile()) continue;
     if (!/\.(ttf|woff2?|codepoints)$/i.test(file)) continue;
-    const dst = path.join(TEMP_OUT, file);
+    const dst = path.join(TEMP_SVGS, file);
     await fs.copy(src, dst);
     const sanitized = sanitizeName(file);
     if (sanitized !== file) {
-      await fs.copy(src, path.join(TEMP_OUT, sanitized));
+      await fs.copy(src, path.join(TEMP_SVGS, sanitized));
     }
   }
 }
@@ -64,7 +71,8 @@ async function detectFamilies() {
     let spaced = family.replace(/([a-z])([A-Z])/g, '$1 $2');
     spaced = spaced.replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2');
     const plus = spaced.split(/\s+/).join('+');
-    if (plus && !families.includes(plus)) {
+
+    if (VALID_GOOGLE_FONT_FAMILIES.has(plus) && !families.includes(plus)) {
       families.push(plus);
     }
   }
@@ -112,32 +120,46 @@ async function downloadCssAndAssets(families) {
 async function main() {
   await fs.ensureDir(FONTS_DIR);
   await fs.ensureDir(CSS_DIR);
+  await fs.ensureDir(SVGS_DIR);
+
+  // Copy and sanitize font files
   await copyAndSanitizeFonts();
+
+  // Detect Google font families
   const families = await detectFamilies();
   if (families.length) {
     await downloadCssAndAssets(families);
   } else {
-    console.log('No families detected.');
+    console.log('No valid Google font families detected.');
   }
-  if (await fs.pathExists(TEMP_OUT)) {
-    const tempFiles = await fs.readdir(TEMP_OUT);
+
+  // Move processed font/svg files to /build
+  if (await fs.pathExists(TEMP_SVGS)) {
+    const tempFiles = await fs.readdir(TEMP_SVGS);
     for (const file of tempFiles) {
-      if (/\.(ttf|woff2?|svg)$/i.test(file)) {
-        await fs.move(path.join(TEMP_OUT, file), path.join(FONTS_DIR, file), { overwrite: true });
+      if (/\.(ttf|woff2?|svg|codepoints)$/i.test(file)) {
+        await fs.move(
+          path.join(TEMP_SVGS, file),
+          path.join(SVGS_DIR, file),
+          { overwrite: true }
+        );
       }
     }
   }
-  const keep = new Set(['fonts', 'css']);
-  const rootItems = await fs.readdir(ROOT);
-  for (const item of rootItems) {
-    if (!keep.has(item)) {
-      await fs.remove(path.join(ROOT, item));
+
+  // Clean up original folders (symbols/, variablefont/)
+  const deleteDirs = ['symbols', 'variablefont'];
+  for (const dir of deleteDirs) {
+    const dirPath = path.join(ROOT, dir);
+    if (await fs.pathExists(dirPath)) {
+      await fs.remove(dirPath);
     }
   }
-  console.log('Cleanup complete. Only /fonts and /css remain.');
+
+  console.log('✅ Build complete. Output in /build directory.');
 }
 
 main().catch(err => {
-  console.error(err);
+  console.error('❌ Error:', err);
   process.exit(1);
 });
