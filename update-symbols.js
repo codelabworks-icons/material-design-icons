@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 const fs = require('fs-extra');
 const path = require('path');
 const fetch = require('node-fetch');
@@ -84,7 +83,7 @@ async function fetchUrl(url) {
 }
 
 async function downloadCssAndAssets(families) {
-  await mkdirp(TEMP_OUT);
+  await mkdirp(CSS_DIR);
   for (const famPlus of families) {
     const cssBase = famPlus.replace(/\+/g, '');
     const cssPath = path.join(CSS_DIR, `${cssBase}.css`);
@@ -126,13 +125,23 @@ async function main() {
     console.log('No families detected.');
   }
   // Move any fonts from TEMP_OUT to FONTS_DIR
-  const tempFiles = await fs.readdir(TEMP_OUT);
-  for (const file of tempFiles) {
-    if (/\.(ttf|woff2?|svg)$/i.test(file)) {
-      await fs.move(path.join(TEMP_OUT, file), path.join(FONTS_DIR, file), { overwrite: true });
+  if (await fs.pathExists(TEMP_OUT)) {
+    const tempFiles = await fs.readdir(TEMP_OUT);
+    for (const file of tempFiles) {
+      if (/\.(ttf|woff2?|svg)$/i.test(file)) {
+        await fs.move(path.join(TEMP_OUT, file), path.join(FONTS_DIR, file), { overwrite: true });
+      }
     }
   }
-  console.log('Done.');
+  // 🔥 Delete everything in ROOT except fonts/ and css/
+  const keep = new Set(['fonts', 'css']);
+  const rootItems = await fs.readdir(ROOT);
+  for (const item of rootItems) {
+    if (!keep.has(item)) {
+      await fs.remove(path.join(ROOT, item));
+    }
+  }
+  console.log('Cleanup complete. Only /fonts and /css remain.');
 }
 
 main().catch(err => {
